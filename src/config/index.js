@@ -42,7 +42,7 @@ function validateConfig() {
   const missing = required.filter(([, val]) => !val).map(([name]) => name);
 
   if (missing.length > 0) {
-    throw new Error(`Missing required env vars: ${missing.join(', ')}`);
+    console.warn(`WARNING: Missing env vars: ${missing.join(', ')}. Some features will not work.`);
   }
 }
 

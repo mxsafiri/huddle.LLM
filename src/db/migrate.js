@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { pool } = require('./pool');
+const { getPool } = require('./pool');
 const logger = require('../config/logger');
 
 async function migrate() {
@@ -8,13 +8,13 @@ async function migrate() {
   const sql = fs.readFileSync(schemaPath, 'utf-8');
 
   try {
-    await pool.query(sql);
+    await getPool().query(sql);
     logger.info('Database migration completed successfully');
   } catch (err) {
     logger.error('Database migration failed', { error: err.message });
     throw err;
   } finally {
-    await pool.end();
+    await getPool().end();
   }
 }
 
