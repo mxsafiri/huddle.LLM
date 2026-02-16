@@ -24,14 +24,22 @@ const limiter = rateLimit({
 app.use(limiter);
 
 app.get('/health', async (_req, res) => {
-  const dbOk = await healthCheck();
-  const status = dbOk ? 'healthy' : 'degraded';
-  res.status(dbOk ? 200 : 503).json({
-    status,
+  let dbOk = false;
+  try {
+    dbOk = await healthCheck();
+  } catch {
+    dbOk = false;
+  }
+  res.status(200).json({
+    status: dbOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     database: dbOk ? 'connected' : 'disconnected',
   });
+});
+
+app.get('/', (_req, res) => {
+  res.json({ service: 'huddle', status: 'running' });
 });
 
 app.use('/', webhookRoutes);
@@ -51,7 +59,7 @@ cron.schedule(config.session.cleanupCron, async () => {
   }
 });
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, '0.0.0.0', () => {
   logger.info(`Huddle agent running on port ${config.port}`, {
     env: config.nodeEnv,
     cleanup: config.session.cleanupCron,
