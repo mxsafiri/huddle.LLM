@@ -2,7 +2,13 @@ const OpenAI = require('openai');
 const { config } = require('../config');
 const logger = require('../config/logger');
 
-const openai = new OpenAI({ apiKey: config.openai.apiKey });
+let _openai = null;
+function getClient() {
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey: config.openai.apiKey });
+  }
+  return _openai;
+}
 
 const SYSTEM_PROMPT = `You are Huddle, a concise group coordination assistant. 
 Rules:
@@ -71,7 +77,7 @@ async function callAI(prompt, json = false) {
       params.response_format = { type: 'json_object' };
     }
 
-    const completion = await openai.chat.completions.create(params);
+    const completion = await getClient().chat.completions.create(params);
 
     const usage = completion.usage;
     logger.info('AI call', {
