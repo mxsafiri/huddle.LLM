@@ -1,0 +1,9 @@
+process.env.NODE_ENV = 'test';
+process.env.PORT = '3001';
+process.env.WHATSAPP_VERIFY_TOKEN = 'your_verify_token_here';
+process.env.WHATSAPP_ACCESS_TOKEN = 'test_access_token';
+process.env.WHATSAPP_PHONE_NUMBER_ID = '123456789';
+process.env.DATABASE_URL = 'postgresql://localhost:5432/huddle_test';
+process.env.OPENAI_API_KEY = 'sk-test-key';
+process.env.OPENAI_MODEL = 'gpt-4o-mini';
+process.env.SESSION_EXPIRY_DAYS = '3';
