@@ -21,6 +21,16 @@ const TRIGGERS = [
     keywords: ['i will', 'nitafanya', 'niko tayari'],
     action: 'ASSIGN_TASK',
   },
+  {
+    name: 'my_huddle',
+    keywords: ['my huddle', 'huddle yangu', 'status'],
+    action: 'MY_HUDDLE',
+  },
+  {
+    name: 'leave_huddle',
+    keywords: ['leave huddle', 'ondoka', 'leave'],
+    action: 'LEAVE_HUDDLE',
+  },
 ];
 
 const CONTRIBUTION_REGEX = /(\d[\d,]*\.?\d*)\s*[kK]?\s*(TZS|tsh|TSH|Tsh)?/i;
@@ -30,6 +40,11 @@ function detectTrigger(text) {
   if (!text || typeof text !== 'string') return null;
 
   const normalized = text.toLowerCase().trim();
+
+  const joinMatch = normalized.match(/^(?:join|jiunge)\s+(hud-[a-z0-9]{6})$/i);
+  if (joinMatch) {
+    return { name: 'join_huddle', action: 'JOIN_HUDDLE', data: { code: joinMatch[1].toUpperCase() } };
+  }
 
   for (const trigger of TRIGGERS) {
     for (const keyword of trigger.keywords) {

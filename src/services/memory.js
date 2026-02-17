@@ -2,23 +2,37 @@ const { query } = require('../db/pool');
 const { config } = require('../config');
 const logger = require('../config/logger');
 
-async function createSession(groupId, language = 'en') {
+function generateSessionCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `HUD-${code}`;
+}
+
+async function createSession(groupId, language = 'en', creatorId = null) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + config.session.expiryDays);
+  const sessionCode = generateSessionCode();
 
   const result = await query(
-    `INSERT INTO sessions (group_id, status, language, expires_at)
-     VALUES ($1, 'active', $2, $3)
+    `INSERT INTO sessions (group_id, session_code, creator_id, status, language, expires_at)
+     VALUES ($1, $2, $3, 'active', $4, $5)
      ON CONFLICT (group_id, status) DO NOTHING
      RETURNING *`,
-    [groupId, language, expiresAt]
+    [groupId, sessionCode, creatorId, language, expiresAt]
   );
 
   if (result.rows.length === 0) {
     return getActiveSession(groupId);
   }
 
-  logger.info('Session created', { groupId, sessionId: result.rows[0].id });
+  if (creatorId) {
+    await addParticipant(result.rows[0].id, creatorId);
+  }
+
+  logger.info('Session created', { groupId, sessionId: result.rows[0].id, sessionCode });
   return result.rows[0];
 }
 
@@ -28,6 +42,57 @@ async function getActiveSession(groupId) {
     [groupId]
   );
   return result.rows[0] || null;
+}
+
+async function getSessionByCode(code) {
+  const result = await query(
+    `SELECT * FROM sessions WHERE session_code = $1 AND status = 'active' LIMIT 1`,
+    [code.toUpperCase()]
+  );
+  return result.rows[0] || null;
+}
+
+async function getUserActiveSession(userId) {
+  const result = await query(
+    `SELECT s.* FROM sessions s
+     JOIN participants p ON p.session_id = s.id
+     WHERE p.user_id = $1 AND s.status = 'active'
+     LIMIT 1`,
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
+async function addParticipant(sessionId, userId, userName = null) {
+  const result = await query(
+    `INSERT INTO participants (session_id, user_id, user_name)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (session_id, user_id) DO NOTHING
+     RETURNING *`,
+    [sessionId, userId, userName]
+  );
+  return result.rows[0] || null;
+}
+
+async function getParticipants(sessionId) {
+  const result = await query(
+    `SELECT * FROM participants WHERE session_id = $1 ORDER BY joined_at`,
+    [sessionId]
+  );
+  return result.rows;
+}
+
+async function notifyParticipants(sessionId, text, sendFn, excludeUserId = null) {
+  const participants = await getParticipants(sessionId);
+  for (const p of participants) {
+    if (p.user_id !== excludeUserId) {
+      try {
+        await sendFn(p.user_id, text);
+      } catch (err) {
+        logger.error('Failed to notify participant', { userId: p.user_id, error: err.message });
+      }
+    }
+  }
 }
 
 async function getSessionWithContributors(sessionId) {
@@ -117,6 +182,11 @@ if (require.main === module) {
 module.exports = {
   createSession,
   getActiveSession,
+  getSessionByCode,
+  getUserActiveSession,
+  addParticipant,
+  getParticipants,
+  notifyParticipants,
   getSessionWithContributors,
   addContribution,
   closeSession,
