@@ -32,39 +32,48 @@ function getResponse(lang, key, ...args) {
   return typeof template === 'function' ? template(...args) : template;
 }
 
+async function sendReply(parsed, text) {
+  if (parsed.isGroup && parsed.groupId) {
+    return whatsapp.sendGroupMessage(parsed.groupId, text);
+  }
+  return whatsapp.sendMessage(parsed.from, text);
+}
+
 async function handleMessage(parsed) {
   if (!parsed || !parsed.text) return;
 
-  const { from, text, senderName, groupJid } = parsed;
-  const chatId = groupJid || from;
+  const { from, text, senderName, isGroup, groupId } = parsed;
+  const chatId = isGroup ? groupId : from;
 
   try {
     const trigger = detectTrigger(text);
     const detectedLang = detectLanguage(text);
 
     if (!trigger) {
-      logger.info('No trigger matched, sending intro', { chatId, text });
-      await whatsapp.sendMessage(from, getResponse(detectedLang, 'intro'));
+      if (!isGroup) {
+        logger.info('No trigger matched, sending intro', { chatId, text });
+        await sendReply(parsed, getResponse(detectedLang, 'intro'));
+      }
       return;
     }
 
-    logger.info('Processing trigger', { action: trigger.action, chatId, from });
+    logger.info('Processing trigger', { action: trigger.action, chatId, from, isGroup });
 
     switch (trigger.action) {
       case 'START_HUDDLE':
-        return await handleStartHuddle(chatId, detectedLang);
+        return await handleStartHuddle(parsed, chatId, detectedLang);
 
       case 'TRACK_CONTRIBUTION':
-        return await handleContribution(chatId, from, senderName, trigger.data);
+        return await handleContribution(parsed, chatId, from, senderName, trigger.data);
 
       case 'ASSIGN_TASK':
-        return await handleTask(chatId, from, senderName, text);
+        return await handleTask(parsed, chatId, from, senderName, text);
 
       case 'SUMMARIZE':
-        return await handleSummary(chatId);
+        return await handleSummary(parsed, chatId);
 
       case 'CLOSE_HUDDLE':
-        return await handleClose(chatId);
+        return await handleClose(parsed, chatId);
 
       default:
         logger.warn('Unknown trigger action', { action: trigger.action });
@@ -73,61 +82,61 @@ async function handleMessage(parsed) {
     logger.error('Message handler error', { error: err.message, chatId });
     const session = await memory.getActiveSession(chatId);
     const lang = session?.language || 'en';
-    await whatsapp.sendMessage(chatId, getResponse(lang, 'error'));
+    await sendReply(parsed, getResponse(lang, 'error'));
   }
 }
 
-async function handleStartHuddle(chatId, language) {
+async function handleStartHuddle(parsed, chatId, language) {
   const existing = await memory.getActiveSession(chatId);
   if (existing) {
-    return whatsapp.sendMessage(chatId, getResponse(existing.language, 'sessionExists'));
+    return sendReply(parsed, getResponse(existing.language, 'sessionExists'));
   }
 
   const session = await memory.createSession(chatId, language);
-  await whatsapp.sendMessage(chatId, getResponse(session.language, 'sessionStarted'));
+  await sendReply(parsed, getResponse(session.language, 'sessionStarted'));
 }
 
-async function handleContribution(chatId, userId, userName, data) {
+async function handleContribution(parsed, chatId, userId, userName, data) {
   const session = await memory.getActiveSession(chatId);
   if (!session) {
     const lang = detectLanguage('');
-    return whatsapp.sendMessage(chatId, getResponse(lang, 'noSession'));
+    return sendReply(parsed, getResponse(lang, 'noSession'));
   }
 
   await memory.addContribution(session.id, userId, userName, data.amount, null);
   const lang = session.language;
-  await whatsapp.sendMessage(
-    chatId,
+  await sendReply(
+    parsed,
     getResponse(lang, 'contributionLogged', userName || userId, data.amount)
   );
 }
 
-async function handleTask(chatId, userId, userName, text) {
+async function handleTask(parsed, chatId, userId, userName, text) {
   const session = await memory.getActiveSession(chatId);
   if (!session) {
-    return whatsapp.sendMessage(chatId, getResponse('en', 'noSession'));
+    return sendReply(parsed, getResponse('en', 'noSession'));
   }
 
   await memory.addContribution(session.id, userId, userName, null, text);
   const lang = session.language;
-  await whatsapp.sendMessage(chatId, getResponse(lang, 'taskLogged', userName || userId, text));
+  await sendReply(parsed, getResponse(lang, 'taskLogged', userName || userId, text));
 }
 
-async function handleSummary(chatId) {
+async function handleSummary(parsed, chatId) {
   const session = await memory.getActiveSession(chatId);
   if (!session) {
-    return whatsapp.sendMessage(chatId, getResponse('en', 'noSession'));
+    return sendReply(parsed, getResponse('en', 'noSession'));
   }
 
   const full = await memory.getSessionWithContributors(session.id);
   const summary = await ai.generateSummary(full, session.language);
-  await whatsapp.sendMessage(chatId, `📊 *Huddle Summary*\n\n${summary}`);
+  await sendReply(parsed, `📊 *Huddle Summary*\n\n${summary}`);
 }
 
-async function handleClose(chatId) {
+async function handleClose(parsed, chatId) {
   const session = await memory.getActiveSession(chatId);
   if (!session) {
-    return whatsapp.sendMessage(chatId, getResponse('en', 'noSession'));
+    return sendReply(parsed, getResponse('en', 'noSession'));
   }
 
   const full = await memory.getSessionWithContributors(session.id);
@@ -146,7 +155,7 @@ async function handleClose(chatId) {
     closeMsg = `📊 *Final Summary*\n\n${summary}\n\n${closeMsg}`;
   }
 
-  await whatsapp.sendMessage(chatId, closeMsg);
+  await sendReply(parsed, closeMsg);
 }
 
 module.exports = { handleMessage, RESPONSES };
