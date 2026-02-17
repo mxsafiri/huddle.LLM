@@ -43,6 +43,34 @@ app.get('/', (_req, res) => {
   res.json({ service: 'huddle', status: 'running' });
 });
 
+app.get('/test-groups-api', async (_req, res) => {
+  const axios = require('axios');
+  const { config } = require('./config');
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/${config.whatsapp.apiVersion}/${config.whatsapp.phoneNumberId}/groups`,
+      {
+        messaging_product: 'whatsapp',
+        subject: 'Huddle Test Group',
+        description: 'Testing Groups API',
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${config.whatsapp.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+    res.json({ success: true, data: response.data });
+  } catch (err) {
+    res.json({
+      success: false,
+      status: err.response?.status,
+      error: err.response?.data || err.message,
+    });
+  }
+});
 
 app.use('/', webhookRoutes);
 
