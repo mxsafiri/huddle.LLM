@@ -43,6 +43,8 @@ async function handleMessage(parsed) {
     const detectedLang = detectLanguage(text);
 
     if (!trigger) {
+      logger.info('No trigger matched, sending intro', { chatId, text });
+      await whatsapp.sendMessage(from, getResponse(detectedLang, 'intro'));
       return;
     }
 
