@@ -51,8 +51,8 @@ app.get('/test-groups-api', async (_req, res) => {
       `https://graph.facebook.com/${config.whatsapp.apiVersion}/${config.whatsapp.phoneNumberId}/groups`,
       {
         messaging_product: 'whatsapp',
-        name: 'Huddle Test Group',
-        participants: [],
+        subject: 'Huddle Test Group',
+        description: 'Testing Huddle Groups API',
       },
       {
         headers: {
