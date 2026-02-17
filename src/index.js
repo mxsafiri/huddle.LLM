@@ -49,15 +49,19 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-cron.schedule(config.session.cleanupCron, async () => {
-  logger.info('Running scheduled session cleanup');
-  try {
-    const result = await cleanupExpiredSessions();
-    logger.info('Cleanup complete', result);
-  } catch (err) {
-    logger.error('Scheduled cleanup failed', { error: err.message });
-  }
-});
+try {
+  cron.schedule(config.session.cleanupCron, async () => {
+    logger.info('Running scheduled session cleanup');
+    try {
+      const result = await cleanupExpiredSessions();
+      logger.info('Cleanup complete', result);
+    } catch (err) {
+      logger.error('Scheduled cleanup failed', { error: err.message });
+    }
+  });
+} catch (err) {
+  logger.error('Failed to schedule cleanup cron', { error: err.message });
+}
 
 const server = app.listen(config.port, '0.0.0.0', () => {
   logger.info(`Huddle agent running on port ${config.port}`, {
@@ -74,6 +78,14 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
   server.close(() => process.exit(0));
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception', { error: err.message, stack: err.stack });
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled rejection', { reason: String(reason) });
 });
 
 module.exports = app;
